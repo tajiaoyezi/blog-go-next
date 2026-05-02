@@ -1,0 +1,49 @@
+# 自动处理文本文件的换行符
+* text=auto eol=lf
+
+# Go 源文件
+*.go text eol=lf
+*.mod text eol=lf
+*.sum text eol=lf
+
+# 前端文件
+*.js text eol=lf
+*.jsx text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.css text eol=lf
+*.scss text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# 配置文件
+*.env text eol=lf
+*.env.* text eol=lf
+*.toml text eol=lf
+.editorconfig text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# 二进制文件（不处理换行符）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.pdf binary
+*.zip binary
+*.tar.gz binary
+
+# 锁定文件
+package-lock.json text eol=lf
+yarn.lock text eol=lf
+pnpm-lock.yaml text eol=lf
+go.sum text eol=lf

@@ -1,0 +1,26 @@
+# GitGuardian / ggshield 扫描白名单
+# 文档: https://docs.gitguardian.com/ggshield-docs/reference/config
+
+version: 2
+
+secret:
+  # 忽略指定路径下的秘密扫描
+  ignored-paths:
+    - "backend/config.yaml"
+    - "backend/config.docker.yaml"
+    - "backend/internal/model/seed.go"
+    - "README.md"
+    - "CLAUDE.md"
+    - ".playwright-mcp/**"
+    - "docs/**"
+
+  # 忽略具体的匹配值（种子数据，非真实凭据）
+  ignored-matches:
+    - name: "seed-admin-email"
+      match: "test@qq.com"
+    - name: "seed-admin-password"
+      match: "1234567"
+    - name: "default-smtp-host"
+      match: "smtp.qq.com"
+    - name: "default-db-password-local"
+      match: "blog123"

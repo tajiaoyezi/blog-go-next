@@ -1,0 +1,39 @@
+server:
+  port: "8080"
+  mode: "release"
+
+database:
+  host: "postgres"
+  port: 5432
+  user: "blog"
+  password: "blog123"
+  dbname: "blog"
+  sslmode: "disable"
+
+redis:
+  addr: "redis:6379"
+  password: ""
+  db: 0
+
+rabbitmq:
+  url: "amqp://guest:guest@rabbitmq:5672/"
+
+elasticsearch:
+  addresses:
+    - "http://elasticsearch:9200"
+
+jwt:
+  secret: ""
+  expire_hour: 6
+
+mail:
+  host: "smtp.qq.com"
+  port: 587
+  username: ""
+  password: ""
+  from: ""
+
+upload:
+  mode: "local"
+  local_path: "./uploads"
+  max_size_mb: 100

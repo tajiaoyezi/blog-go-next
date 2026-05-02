@@ -1,0 +1,39 @@
+server:
+  port: "8080"
+  mode: "debug"  # debug / release / test
+
+database:
+  host: "localhost"
+  port: 5432
+  user: "blog"
+  password: "blog123"
+  dbname: "blog"
+  sslmode: "disable"
+
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+
+rabbitmq:
+  url: "amqp://guest:guest@localhost:5672/"
+
+elasticsearch:
+  addresses:
+    - "http://localhost:9200"
+
+jwt:
+  secret: ""  # 必须通过环境变量 JWT_SECRET 设置（至少 32 字符）
+  expire_hour: 6
+
+mail:
+  host: "smtp.qq.com"
+  port: 587
+  username: ""
+  password: ""
+  from: ""
+
+upload:
+  mode: "local"  # local / oss / cos
+  local_path: "./uploads"
+  max_size_mb: 100

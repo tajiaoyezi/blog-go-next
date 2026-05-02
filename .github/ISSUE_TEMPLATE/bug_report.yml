@@ -1,0 +1,84 @@
+name: Bug Report
+<!---
+name: 漏洞报告
+about: Create a report to help us improve
+-->
+
+description: Report a bug to help us improve the project
+title: '[Bug] '
+labels: ['bug', 'triage']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+        
+        感谢您花时间填写此漏洞报告！
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description | 漏洞描述
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe the bug here...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce | 复现步骤
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. Scroll down to '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior | 预期行为
+      description: What you expected to happen
+      placeholder: Describe what you expected to happen
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior | 实际行为
+      description: What actually happened
+      placeholder: Describe what actually happened
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment | 环境信息
+      description: Please provide your environment details
+      placeholder: |
+        - OS: [e.g. macOS 14, Ubuntu 22.04]
+        - Docker version: [e.g. 24.0.0]
+        - Go version: [e.g. 1.21.0]
+        - Node.js version: [e.g. 18.17.0]
+        - Browser: [e.g. Chrome 120]
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs | 日志
+      description: Please provide relevant logs
+      placeholder: Paste relevant logs here
+      render: shell
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Confirmation | 确认
+      options:
+        - label: I have searched existing issues | 我已搜索现有的 issues
+          required: true
+        - label: I have provided all necessary information | 我已提供所有必要信息
+          required: true
