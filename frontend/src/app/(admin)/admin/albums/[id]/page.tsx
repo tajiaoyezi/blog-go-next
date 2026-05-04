@@ -23,6 +23,10 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
+import { MasonryGallery } from "@/components/masonry/masonry-gallery";
+import type { Photo as MasonryPhoto } from "@/components/masonry/masonry-gallery";
+import { Lightbox } from "@/components/lightbox/lightbox";
+import { UploadZone } from "@/components/upload/upload-zone";
 
 interface Photo {
   id: number;
@@ -101,8 +105,7 @@ export default function AlbumDetailPage() {
     }
   }, [albumId, fetchAlbum, fetchPhotos]);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
+  const uploadFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
     const imageFiles = Array.from(files).filter((f) =>
@@ -144,6 +147,10 @@ export default function AlbumDetailPage() {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    await uploadFiles(e.target.files);
   };
 
   const toggleSelect = (id: number) => {
@@ -270,130 +277,43 @@ export default function AlbumDetailPage() {
         </div>
       </div>
 
-      {/* 照片网格 */}
-      {loading ? (
-        <div className="flex items-center justify-center h-64 text-muted-foreground">
-          加载中...
-        </div>
-      ) : photos.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-64 gap-4 text-muted-foreground">
-          <ImageIcon className="size-12 opacity-40" />
-          <p>暂无照片，点击「上传照片」添加</p>
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
-          {photos.map((photo, index) => (
-            <Card
-              key={photo.id}
-              className={`overflow-hidden group cursor-pointer relative ${
-                selectedIds.has(photo.id)
-                  ? "ring-2 ring-primary ring-offset-2"
-                  : ""
-              }`}
-              onClick={() => openPreview(index)}
-            >
-              <div className="relative aspect-square bg-muted">
-                <Image
-                  src={photo.photoSrc}
-                  alt={photo.photoName || "照片"}
-                  fill
-                  sizes="(max-width: 640px) 33vw, (max-width: 768px) 25vw, (max-width: 1024px) 20vw, 16vw"
-                  className="object-cover"
-                  loading="lazy"
-                />
-                {/* 悬停遮罩 */}
-                <div
-                  className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Button
-                    variant="secondary"
-                    size="icon-sm"
-                    className="size-8"
-                    onClick={() => toggleSelect(photo.id)}
-                  >
-                    {selectedIds.has(photo.id) ? (
-                      <X className="size-4" />
-                    ) : (
-                      <div className="size-4 rounded-sm border-2 border-current" />
-                    )}
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="icon-sm"
-                    className="size-8"
-                    onClick={() => handleDeletePhoto(photo.id)}
-                  >
-                    <Trash2 className="size-4" />
-                  </Button>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      )}
+      {/* 拖拽上传区域 */}
+      <UploadZone
+        onFilesDrop={uploadFiles}
+        disabled={uploading}
+      />
+
+      {/* 照片瀑布流 */}
+      <MasonryGallery
+        photos={photos as MasonryPhoto[]}
+        loading={loading}
+        onPhotoClick={(_, index) => openPreview(index)}
+        selectable={selectedIds.size > 0}
+        selectedIds={Array.from(selectedIds)}
+        onSelect={(id, selected) => {
+          if (selected) {
+            setSelectedIds((prev) => new Set([...prev, id]));
+          } else {
+            setSelectedIds((prev) => {
+              const next = new Set(prev);
+              next.delete(id);
+              return next;
+            });
+          }
+        }}
+      />
 
       {/* 大图预览 */}
-      {previewIndex !== null && photos[previewIndex] && (
-        <div
-          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
-          onClick={closePreview}
-        >
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute top-4 right-4 text-white hover:bg-white/20"
-            onClick={closePreview}
-          >
-            <X className="size-6" />
-          </Button>
-
-          {photos.length > 1 && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute left-4 text-white hover:bg-white/20"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  prevPhoto();
-                }}
-              >
-                <ChevronLeft className="size-8" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="absolute right-4 text-white hover:bg-white/20"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  nextPhoto();
-                }}
-              >
-                <ChevronRight className="size-8" />
-              </Button>
-            </>
-          )}
-
-          <div
-            className="relative max-w-[90vw] max-h-[90vh]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Image
-              src={photos[previewIndex].photoSrc}
-              alt={photos[previewIndex].photoName || "预览"}
-              width={1200}
-              height={800}
-              className="object-contain max-w-[90vw] max-h-[90vh]"
-              priority
-            />
-          </div>
-
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm">
-            {previewIndex + 1} / {photos.length}
-          </div>
-        </div>
-      )}
+      <Lightbox
+        images={photos.map((p) => ({
+          src: p.photoSrc,
+          alt: p.photoName,
+        }))}
+        open={previewIndex !== null}
+        index={previewIndex ?? 0}
+        onClose={closePreview}
+        onIndexChange={setPreviewIndex}
+      />
 
       {/* 删除确认弹窗 */}
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
