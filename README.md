@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/badge/Go-1.21%2B-00ADD8?logo=go" alt="Go">
   <img src="https://img.shields.io/badge/Node-18%2B-339933?logo=nodedotjs" alt="Node.js">
   <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react" alt="React">
-  <img src="https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs" alt="Next.js">
+  <img src="https://img.shields.io/badge/Next.js-16-000000?logo=nextdotjs" alt="Next.js">
   <img src="https://img.shields.io/badge/Docker-24%2B-2496ED?logo=docker" alt="Docker">
 </p>
 
@@ -29,7 +29,7 @@
 
 Go + Next.js 全栈博客系统，重构自 [SpringBoot + Vue 博客项目](https://github.com/tajiaoyezi/blog)。
 
-采用现代技术栈重构，后端使用 Go 1.21+ + Gin 框架提供高性能 API，前端使用 Next.js 15 + React 19 提供现代化管理后台和流畅的用户体验。支持 Docker 一键部署，5 分钟内即可运行完整的博客平台。
+采用现代技术栈重构，后端使用 Go 1.21+ + Gin 框架提供高性能 API，前端使用 Next.js 16 + React 19 提供现代化管理后台和流畅的用户体验。支持 Docker 一键部署，5 分钟内即可运行完整的博客平台。
 
 ## 截图展示
 
@@ -70,7 +70,12 @@ Go + Next.js 全栈博客系统，重构自 [SpringBoot + Vue 博客项目](http
 - ✉️ **邮箱验证** - 注册/找回密码邮箱验证
 
 ### 管理后台
-- 📊 **仪表盘** - 访问统计、数据可视化
+- 📊 **仪表盘** - 访问统计、数据可视化、快捷操作
+- 🗂️ **DataTable 数据表格** - 排序、筛选、分页、批量选择（基于 TanStack Table）
+- ⌨️ **CommandPalette 命令面板** - 快速导航和操作（Ctrl/Cmd+K）
+- ✍️ **Markdown 编辑器增强** - 工具栏、自动保存、智能标签输入
+- 🖼️ **相册管理** - 网格/列表视图、瀑布流布局、灯箱预览、拖拽上传
+- 📱 **移动端适配** - 响应式侧边栏、触控优化、表格横向滚动
 - 📝 **操作日志** - 完整的管理操作记录
 - ⚙️ **系统配置** - 站点信息、SEO 配置
 - 🔄 **自动迁移** - 启动时自动数据库迁移
@@ -87,11 +92,15 @@ Go + Next.js 全栈博客系统，重构自 [SpringBoot + Vue 博客项目](http
 - **gorilla/websocket**（聊天室）
 
 ### 前端
-- **Next.js 15** + React 19 + TypeScript
+- **Next.js 16** + React 19 + TypeScript
 - **TailwindCSS v4** + shadcn/ui
+- **TanStack Table**（数据表格）
 - **Zustand**（状态管理）
+- **Zod** + **React Hook Form**（表单验证）
+- **Framer Motion**（动画）
 - **Recharts**（图表）
 - **@uiw/react-md-editor**（Markdown 编辑器）
+- **Vitest** + **Playwright**（测试）
 
 ## 快速开始
 
@@ -141,7 +150,7 @@ docker compose exec backend \
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                    Frontend (Next.js 15 / :3000)                  │
+│                    Frontend (Next.js 16 / :3000)                  │
 │  ┌────────────┐  ┌────────────┐  ┌────────────┐   │
 │  │  博客前台  │  │  管理后台  │  │  通用组件  │   │
 │  │  (blog)   │  │  (admin)  │  │ (ui/lib) │   │
@@ -212,6 +221,13 @@ blog-go-next/
 │       ├─── app/(blog)/     # 前台博客页面
 │       ├─── app/(admin)/    # 后台管理页面
 │       ├─── components/     # 共享组件
+│       │   ├─── data-table/ # DataTable 组件
+│       │   ├─── editor/     # 编辑器组件
+│       │   ├─── albums/     # 相册组件
+│       │   ├─── lightbox/   # 灯箱组件
+│       │   ├─── masonry/    # 瀑布流组件
+│       │   ├─── upload/     # 上传组件
+│       │   └─── ui/         # shadcn/ui 组件
 │       ├─── lib/            # API 封装 + 共享类型
 │       ├─── hooks/          # 自定义 hooks
 │       └─── stores/         # Zustand stores
@@ -289,14 +305,33 @@ npm run dev
 
 前端默认端口 3000。
 
-## E2E 测试
+## 测试
 
-项目使用 Playwright 进行端到端测试，已通过 35 个测试用例：
+### 单元测试
+
+使用 Vitest 进行单元测试，覆盖核心组件和工具函数：
+
+```bash
+cd frontend
+npm run test:run        # 运行测试
+npm run test:coverage   # 查看覆盖率报告
+```
+
+- **测试数量**: 211 个测试用例
+- **代码覆盖率**: 87%（Statements 86.65%, Branches 82.56%, Functions 83.26%）
+- **覆盖范围**: DataTable、编辑器、相册、上传、API 客户端、状态管理等
+
+### E2E 测试
+
+使用 Playwright 进行端到端测试：
 
 ```bash
 cd frontend
 npx playwright test
 ```
+
+- **测试数量**: 35 个测试用例
+- **覆盖场景**: API 健康检查、认证、博客页面、管理后台 CRUD
 
 ## 贡献
 
