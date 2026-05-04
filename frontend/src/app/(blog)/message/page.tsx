@@ -142,8 +142,8 @@ export default function MessagePage() {
           messages.map((msg) => (
             <Card key={msg.id}>
               <CardContent className="pt-4">
-                <div className="flex items-start gap-3">
-<Avatar className="h-9 w-9 shrink-0">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                  <Avatar className="h-9 w-9 shrink-0">
                      {msg.avatar ? (
                        <Image
                          src={msg.avatar}

@@ -78,7 +78,7 @@ export default function TalksPage() {
           return (
             <Card key={talk.id}>
               <CardContent className="pt-4">
-                <div className="flex items-start gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                   <Avatar className="h-10 w-10 shrink-0">
                     {talk.avatar ? (
                       <Image src={talk.avatar} alt="" className="object-cover" fill sizes="40px" />
