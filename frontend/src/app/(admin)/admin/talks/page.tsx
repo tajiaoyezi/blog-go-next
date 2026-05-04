@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "@/lib/api";
 import type { PageResult } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
+import { toast } from "sonner";
+import Image from "next/image";
+import { Plus, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,9 +17,14 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
-import Image from "next/image";
-import { Plus, Trash2 } from "lucide-react";
+import { DataTable } from "@/components/data-table";
+import { DataTableSkeleton } from "@/components/data-table/data-table-skeleton";
+import { EmptyState, EmptyStates } from "@/components/ui/empty-state";
+import { type ColumnDef } from "@tanstack/react-table";
+
+/* ==============================
+ * 说说列表数据类型
+ * ============================== */
 
 interface Talk {
   id: number;
@@ -30,23 +37,40 @@ interface Talk {
 
 type PageData = PageResult<Talk>;
 
+/* ==============================
+ * 说说管理页面
+ * ============================== */
+
 export default function TalksPage() {
   const [talks, setTalks] = useState<Talk[]>([]);
   const [count, setCount] = useState(0);
   const [current, setCurrent] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(true);
+
+  // 发布弹窗
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [content, setContent] = useState("");
   const [images, setImages] = useState("");
-  const pageSize = 10;
 
-  const fetchData = useCallback(async (page: number) => {
+  // 确认对话框状态
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  }>({
+    open: false,
+    title: "",
+    description: "",
+    onConfirm: () => {},
+  });
+
+  const fetchData = useCallback(async (page: number, size: number) => {
     setLoading(true);
     try {
       const res = await api.get<PageData>(
-        `/admin/talks?current=${page}&size=${pageSize}`,
+        `/admin/talks?current=${page}&size=${size}`,
       );
       if (res.flag) {
         setTalks(res.data.records);
@@ -60,8 +84,8 @@ export default function TalksPage() {
   }, []);
 
   useEffect(() => {
-    fetchData(current);
-  }, [current, fetchData]);
+    fetchData(current, pageSize);
+  }, [current, pageSize, fetchData]);
 
   const handlePublish = async () => {
     if (!content.trim()) {
@@ -79,7 +103,7 @@ export default function TalksPage() {
         setDialogOpen(false);
         setContent("");
         setImages("");
-        fetchData(1);
+        fetchData(1, pageSize);
         setCurrent(1);
       } else {
         toast.error(res.message);
@@ -89,30 +113,112 @@ export default function TalksPage() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    setPendingDeleteId(id);
-    setDeleteDialogOpen(true);
-  };
+  const handleDelete = useCallback((ids: number[]) => {
+    const isBatch = ids.length > 1;
+    setConfirmDialog({
+      open: true,
+      title: isBatch ? "确认批量删除" : "确认删除",
+      description: isBatch
+        ? `确定要删除选中的 ${ids.length} 条说说吗？此操作不可恢复。`
+        : "确定要删除该说说吗？此操作不可恢复。",
+      onConfirm: async () => {
+        try {
+          const res = await api.delete("/admin/talks", ids);
+          if (res.flag) {
+            toast.success(isBatch ? "批量删除成功" : "删除成功");
+            fetchData(current, pageSize);
+          } else {
+            toast.error(res.message);
+          }
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "操作失败");
+        } finally {
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+        }
+      },
+    });
+  }, [current, pageSize]);
 
-  const confirmDelete = async () => {
-    if (!pendingDeleteId) return;
-    try {
-      const res = await api.delete("/admin/talks", [pendingDeleteId]);
-      if (res.flag) {
-        toast.success("删除成功");
-        fetchData(current);
-      } else {
-        toast.error(res.message);
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "操作失败");
-    } finally {
-      setDeleteDialogOpen(false);
-      setPendingDeleteId(null);
-    }
-  };
+  const totalPages = Math.max(0, Math.ceil(count / pageSize));
 
-  const totalPages = Math.ceil(count / pageSize);
+  // 列配置
+  const columns: ColumnDef<Talk>[] = useMemo(
+    () => [
+      {
+        accessorKey: "content",
+        header: "内容",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <div className="max-w-[500px]">
+            <p className="text-sm whitespace-pre-wrap">
+              {row.original.content}
+            </p>
+            {row.original.images && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {row.original.images.split(",").map((img, i) => (
+                  <Image
+                    key={i}
+                    src={img}
+                    alt=""
+                    width={80}
+                    height={80}
+                    className="h-20 w-20 rounded-md object-cover"
+                    loading="lazy"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        accessorKey: "createTime",
+        header: "发布时间",
+        enableSorting: true,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.createTime}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "操作",
+        enableSorting: false,
+        size: 120,
+        cell: ({ row }) => {
+          const talk = row.original;
+          return (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => handleDelete([talk.id])}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    [handleDelete],
+  );
+
+  // 批量操作配置
+  const batchActions = useMemo(
+    () => [
+      {
+        label: "批量删除",
+        onClick: (rows: unknown[]) => {
+          const ids = (rows as Talk[]).map((row) => row.id);
+          handleDelete(ids);
+        },
+        variant: "destructive" as const,
+      },
+    ],
+    [handleDelete],
+  );
 
   return (
     <div className="space-y-4">
@@ -125,92 +231,57 @@ export default function TalksPage() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center h-24 text-muted-foreground">
-          加载中...
-        </div>
+        <DataTableSkeleton columns={3} rows={5} />
       ) : talks.length === 0 ? (
-        <div className="flex items-center justify-center h-24 text-muted-foreground">
-          暂无数据
-        </div>
+        <EmptyState {...EmptyStates.talks} />
       ) : (
-        <div className="space-y-3">
-          {talks.map((talk) => (
-            <Card key={talk.id}>
-              <CardContent className="flex items-start justify-between pt-4">
-                <div className="flex-1 space-y-2">
-                  <p className="text-sm whitespace-pre-wrap">{talk.content}</p>
-                  {talk.images && (
-                    <div className="flex flex-wrap gap-2">
-                      {talk.images.split(",").map((img, i) => (
-                        <Image
-                          key={i}
-                          src={img}
-                          alt=""
-                          width={80}
-                          height={80}
-                          className="h-20 w-20 rounded-md object-cover"
-                          loading="lazy"
-                        />
-                      ))}
-                    </div>
-                  )}
-                  <p className="text-xs text-muted-foreground">
-                    {talk.createTime}
-                  </p>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => handleDelete(talk.id)}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <DataTable
+          data={talks}
+          columns={columns}
+          pageCount={totalPages}
+          pageSize={pageSize}
+          currentPage={current}
+          onPageChange={setCurrent}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setCurrent(1);
+          }}
+          selectable={true}
+          batchActions={batchActions}
+          sortable={true}
+          loading={false}
+          emptyTitle="暂无说说"
+          emptyDescription="还没有发布任何说说"
+        />
       )}
 
-      {totalPages > 1 && (
-        <div className="flex items-center justify-end gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={current === 1}
-            onClick={() => setCurrent((p) => p - 1)}
-          >
-            上一页
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            {current} / {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={current === totalPages}
-            onClick={() => setCurrent((p) => p + 1)}
-          >
-            下一页
-          </Button>
-        </div>
-      )}
-
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      {/* 确认删除对话框 */}
+      <Dialog
+        open={confirmDialog.open}
+        onOpenChange={(open) =>
+          setConfirmDialog((prev) => ({ ...prev, open }))
+        }
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <Trash2 className="size-5" />
-              确认删除
+              {confirmDialog.title}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            确定要删除该说说吗？此操作不可恢复。
+            {confirmDialog.description}
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setConfirmDialog((prev) => ({ ...prev, open: false }))
+              }
+            >
               取消
             </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
+            <Button variant="destructive" onClick={confirmDialog.onConfirm}>
               确认删除
             </Button>
           </DialogFooter>

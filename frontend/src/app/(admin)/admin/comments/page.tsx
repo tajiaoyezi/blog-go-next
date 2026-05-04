@@ -1,17 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "@/lib/api";
 import type { PageResult } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import Image from "next/image";
@@ -23,6 +15,14 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { DataTable } from "@/components/data-table";
+import { DataTableSkeleton } from "@/components/data-table/data-table-skeleton";
+import { EmptyState, EmptyStates } from "@/components/ui/empty-state";
+import { type ColumnDef } from "@tanstack/react-table";
+
+/* ==============================
+ * 评论列表数据类型
+ * ============================== */
 
 interface Comment {
   id: number;
@@ -36,20 +36,35 @@ interface Comment {
 
 type PageData = PageResult<Comment>;
 
+/* ==============================
+ * 评论管理页面
+ * ============================== */
+
 export default function CommentsPage() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [count, setCount] = useState(0);
   const [current, setCurrent] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [loading, setLoading] = useState(true);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
-  const pageSize = 10;
 
-  const fetchData = useCallback(async (page: number) => {
+  // 确认对话框状态
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  }>({
+    open: false,
+    title: "",
+    description: "",
+    onConfirm: () => {},
+  });
+
+  const fetchData = useCallback(async (page: number, size: number) => {
     setLoading(true);
     try {
       const res = await api.get<PageData>(
-        `/admin/comments?current=${page}&size=${pageSize}`,
+        `/admin/comments?current=${page}&size=${size}`,
       );
       if (res.flag) {
         setComments(res.data.records);
@@ -63,179 +78,231 @@ export default function CommentsPage() {
   }, []);
 
   useEffect(() => {
-    fetchData(current);
-  }, [current, fetchData]);
+    fetchData(current, pageSize);
+  }, [current, pageSize, fetchData]);
 
-  const handleReview = async (id: number) => {
+  const handleReview = useCallback(async (ids: number[]) => {
+    const isBatch = ids.length > 1;
     try {
-      const res = await api.put("/admin/comments/review", { idList: [id], isReview: true });
+      const res = await api.put("/admin/comments/review", {
+        idList: ids,
+        isReview: true,
+      });
       if (res.flag) {
-        toast.success("审核通过");
-        fetchData(current);
+        toast.success(isBatch ? "批量审核通过" : "审核通过");
+        fetchData(current, pageSize);
       } else {
         toast.error(res.message);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "操作失败");
     }
-  };
+  }, [current, pageSize]);
 
-  const handleDelete = (id: number) => {
-    setPendingDeleteId(id);
-    setDeleteDialogOpen(true);
-  };
+  const handleDelete = useCallback((ids: number[]) => {
+    const isBatch = ids.length > 1;
+    setConfirmDialog({
+      open: true,
+      title: isBatch ? "确认批量删除" : "确认删除",
+      description: isBatch
+        ? `确定要删除选中的 ${ids.length} 条评论吗？此操作不可恢复。`
+        : "确定要删除该评论吗？此操作不可恢复。",
+      onConfirm: async () => {
+        try {
+          const res = await api.delete("/admin/comments", ids);
+          if (res.flag) {
+            toast.success(isBatch ? "批量删除成功" : "删除成功");
+            fetchData(current, pageSize);
+          } else {
+            toast.error(res.message);
+          }
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : "操作失败");
+        } finally {
+          setConfirmDialog((prev) => ({ ...prev, open: false }));
+        }
+      },
+    });
+  }, [current, pageSize]);
 
-  const confirmDelete = async () => {
-    if (!pendingDeleteId) return;
-    try {
-      const res = await api.delete("/admin/comments", [pendingDeleteId]);
-      if (res.flag) {
-        toast.success("删除成功");
-        fetchData(current);
-      } else {
-        toast.error(res.message);
-      }
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "操作失败");
-    } finally {
-      setDeleteDialogOpen(false);
-      setPendingDeleteId(null);
-    }
-  };
+  const totalPages = Math.max(0, Math.ceil(count / pageSize));
 
-  const totalPages = Math.ceil(count / pageSize);
+  // 列配置
+  const columns: ColumnDef<Comment>[] = useMemo(
+    () => [
+      {
+        accessorKey: "nickname",
+        header: "用户",
+        enableSorting: true,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-2">
+            {row.original.avatar && (
+              <Image
+                src={row.original.avatar}
+                alt=""
+                width={24}
+                height={24}
+                className="size-6 rounded-full"
+                loading="lazy"
+              />
+            )}
+            <span className="text-sm">{row.original.nickname}</span>
+          </div>
+        ),
+      },
+      {
+        accessorKey: "commentContent",
+        header: "评论内容",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <div className="max-w-[300px] truncate">
+            {row.original.commentContent}
+          </div>
+        ),
+      },
+      {
+        accessorKey: "articleTitle",
+        header: "文章",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <div className="max-w-[150px] truncate text-muted-foreground">
+            {row.original.articleTitle}
+          </div>
+        ),
+      },
+      {
+        accessorKey: "isReview",
+        header: "状态",
+        enableSorting: true,
+        cell: ({ row }) =>
+          row.original.isReview ? (
+            <Badge variant="outline">已审核</Badge>
+          ) : (
+            <Badge variant="secondary">待审核</Badge>
+          ),
+      },
+      {
+        accessorKey: "createTime",
+        header: "评论时间",
+        enableSorting: true,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.createTime}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "操作",
+        enableSorting: false,
+        size: 120,
+        cell: ({ row }) => {
+          const comment = row.original;
+          return (
+            <div className="flex items-center gap-1">
+              {!comment.isReview && (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => handleReview([comment.id])}
+                >
+                  <Check className="size-4" />
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => handleDelete([comment.id])}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    [handleDelete, handleReview],
+  );
+
+  // 批量操作配置
+  const batchActions = useMemo(
+    () => [
+      {
+        label: "批量审核",
+        onClick: (rows: unknown[]) => {
+          const ids = (rows as Comment[]).map((row) => row.id);
+          handleReview(ids);
+        },
+        variant: "default" as const,
+      },
+      {
+        label: "批量删除",
+        onClick: (rows: unknown[]) => {
+          const ids = (rows as Comment[]).map((row) => row.id);
+          handleDelete(ids);
+        },
+        variant: "destructive" as const,
+      },
+    ],
+    [handleDelete, handleReview],
+  );
 
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-semibold">评论管理</h1>
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>用户</TableHead>
-              <TableHead>评论内容</TableHead>
-              <TableHead>文章</TableHead>
-              <TableHead>状态</TableHead>
-              <TableHead>评论时间</TableHead>
-              <TableHead className="text-right">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
-                  加载中...
-                </TableCell>
-              </TableRow>
-            ) : comments.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
-                  暂无数据
-                </TableCell>
-              </TableRow>
-            ) : (
-              comments.map((comment) => (
-                <TableRow key={comment.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {comment.avatar && (
-                        <Image
-                          src={comment.avatar}
-                          alt=""
-                          width={24}
-                          height={24}
-                          className="size-6 rounded-full"
-                          loading="lazy"
-                        />
-                      )}
-                      <span className="text-sm">{comment.nickname}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="max-w-[300px] truncate">
-                    {comment.commentContent}
-                  </TableCell>
-                  <TableCell className="max-w-[150px] truncate text-muted-foreground">
-                    {comment.articleTitle}
-                  </TableCell>
-                  <TableCell>
-                    {comment.isReview ? (
-                      <Badge variant="outline">已审核</Badge>
-                    ) : (
-                      <Badge variant="secondary">待审核</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {comment.createTime}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      {!comment.isReview && (
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => handleReview(comment.id)}
-                        >
-                          <Check className="size-4" />
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => handleDelete(comment.id)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-end gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={current === 1}
-            onClick={() => setCurrent((p) => p - 1)}
-          >
-            上一页
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            {current} / {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={current === totalPages}
-            onClick={() => setCurrent((p) => p + 1)}
-          >
-            下一页
-          </Button>
-        </div>
+      {loading ? (
+        <DataTableSkeleton columns={6} rows={5} />
+      ) : comments.length === 0 ? (
+        <EmptyState {...EmptyStates.comments} />
+      ) : (
+        <DataTable
+          data={comments}
+          columns={columns}
+          pageCount={totalPages}
+          pageSize={pageSize}
+          currentPage={current}
+          onPageChange={setCurrent}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setCurrent(1);
+          }}
+          selectable={true}
+          batchActions={batchActions}
+          sortable={true}
+          loading={false}
+          emptyTitle="暂无评论"
+          emptyDescription="还没有收到任何评论"
+        />
       )}
 
-      {/* 删除确认弹窗 */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      {/* 确认删除对话框 */}
+      <Dialog
+        open={confirmDialog.open}
+        onOpenChange={(open) =>
+          setConfirmDialog((prev) => ({ ...prev, open }))
+        }
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <Trash2 className="size-5" />
-              确认删除
+              {confirmDialog.title}
             </DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            确定要删除该评论吗？此操作不可恢复。
+            {confirmDialog.description}
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setConfirmDialog((prev) => ({ ...prev, open: false }))
+              }
+            >
               取消
             </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
+            <Button variant="destructive" onClick={confirmDialog.onConfirm}>
               确认删除
             </Button>
           </DialogFooter>

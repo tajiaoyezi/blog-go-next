@@ -18,10 +18,8 @@ interface AuthState {
   logout: () => void;
 }
 
-const emptySubscribe = () => () => {};
-
 let hydrated = false;
-let hydrateListeners = new Set<() => void>();
+const hydrateListeners = new Set<() => void>();
 
 function onHydrate() {
   hydrated = true;

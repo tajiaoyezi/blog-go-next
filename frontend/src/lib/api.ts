@@ -1,4 +1,5 @@
 import { useAuthStore } from "@/stores/auth";
+import { toast } from "sonner";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8080/api/v1";
 
@@ -62,8 +63,10 @@ async function request<T>(
   } catch (err) {
     if (timer) clearTimeout(timer);
     if (err instanceof DOMException && err.name === "AbortError") {
+      toast.error("请求超时，请稍后重试");
       throw new Error(`请求超时: ${path}`);
     }
+    toast.error("网络错误，请检查连接");
     throw err;
   }
   if (timer) clearTimeout(timer);
@@ -80,16 +83,19 @@ async function request<T>(
     // 401 时清除登录态，让 layout 跳转到登录页
     if (res.status === 401 && token) {
       useAuthStore.getState().logout();
+      toast.error("登录已过期，请重新登录");
       throw new Error("登录已过期，请重新登录");
     }
 
-    const isAuthenticated = !!token;
-    throw new Error(
-      serverMessage || `请求失败: ${res.status} ${res.statusText}`,
-    );
+    const message = serverMessage || `请求失败: ${res.status} ${res.statusText}`;
+    toast.error(message);
+    throw new Error(message);
   }
 
-  return (await res.json()) as ApiResponse<T>;
+  const data = (await res.json()) as ApiResponse<T>;
+
+  // 业务逻辑错误（HTTP 200 但 flag=false）由调用方处理，避免重复 toast
+  return data;
 }
 
 export const api = {

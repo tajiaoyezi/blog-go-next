@@ -1,16 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { type ColumnDef } from "@tanstack/react-table";
 import { api } from "@/lib/api";
+import type { PageResult } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
 import {
@@ -20,6 +14,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { DataTable } from "@/components/data-table";
+import { DataTableSkeleton } from "@/components/data-table/data-table-skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface OperationLog {
   id: number;
@@ -33,30 +30,27 @@ interface OperationLog {
   createTime: string;
 }
 
-interface PageData {
-  records: OperationLog[];
-  total: number;
-}
+type PageData = PageResult<OperationLog>;
 
 export default function LogsPage() {
   const [logs, setLogs] = useState<OperationLog[]>([]);
-  const [total, setTotal] = useState(0);
+  const [count, setCount] = useState(0);
   const [current, setCurrent] = useState(1);
   const [loading, setLoading] = useState(true);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
-  const pageSize = 10;
+  const [pageSize, setPageSize] = useState(10);
 
-  const fetchData = useCallback(async (page: number) => {
+  const fetchData = useCallback(async (page: number, size: number) => {
     setLoading(true);
     try {
       const res = await api.get<PageData>(
-        `/admin/operation/logs?current=${page}&size=${pageSize}`,
+        `/admin/operation/logs?current=${page}&size=${size}`,
       );
       if (res.flag) {
         setLogs(res.data.records);
-        setTotal(res.data.total);
+        setCount(res.data.count);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "加载失败");
@@ -66,13 +60,13 @@ export default function LogsPage() {
   }, []);
 
   useEffect(() => {
-    fetchData(current);
-  }, [current, fetchData]);
+    fetchData(current, pageSize);
+  }, [current, pageSize, fetchData]);
 
-  const handleDelete = (id: number) => {
+  const handleDelete = useCallback((id: number) => {
     setPendingDeleteId(id);
     setDeleteDialogOpen(true);
-  };
+  }, []);
 
   const confirmDelete = async () => {
     if (!pendingDeleteId) return;
@@ -80,7 +74,7 @@ export default function LogsPage() {
       const res = await api.delete("/admin/operation/logs", [pendingDeleteId]);
       if (res.flag) {
         toast.success("删除成功");
-        fetchData(current);
+        fetchData(current, pageSize);
       } else {
         toast.error(res.message);
       }
@@ -102,7 +96,7 @@ export default function LogsPage() {
       if (res.flag) {
         toast.success("清空成功");
         setCurrent(1);
-        fetchData(1);
+        fetchData(1, pageSize);
       } else {
         toast.error(res.message);
       }
@@ -113,7 +107,93 @@ export default function LogsPage() {
     }
   };
 
-  const totalPages = Math.ceil(total / pageSize);
+  const totalPages = Math.max(0, Math.ceil(count / pageSize));
+
+  const handlePageSizeChange = useCallback((size: number) => {
+    setPageSize(size);
+    setCurrent(1);
+  }, []);
+
+  const columns: ColumnDef<OperationLog>[] = useMemo(
+    () => [
+      {
+        accessorKey: "module",
+        header: "模块",
+        enableSorting: true,
+      },
+      {
+        accessorKey: "description",
+        header: "操作描述",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <span className="block max-w-[200px] truncate">
+            {row.original.description}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "method",
+        header: "请求方式",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <code className="rounded bg-muted px-1.5 py-0.5 text-xs">
+            {row.original.method}
+          </code>
+        ),
+      },
+      {
+        accessorKey: "uri",
+        header: "请求地址",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <span className="block max-w-[180px] truncate font-mono text-xs text-muted-foreground">
+            {row.original.uri}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "nickname",
+        header: "操作人",
+        enableSorting: true,
+      },
+      {
+        accessorKey: "ipAddress",
+        header: "IP",
+        enableSorting: false,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.ipAddress}
+          </span>
+        ),
+      },
+      {
+        accessorKey: "createTime",
+        header: "操作时间",
+        enableSorting: true,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.createTime}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "操作",
+        enableSorting: false,
+        size: 80,
+        cell: ({ row }) => (
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => handleDelete(row.original.id)}
+          >
+            <Trash2 className="size-4" />
+          </Button>
+        ),
+      },
+    ],
+    [handleDelete]
+  );
 
   return (
     <div className="space-y-4">
@@ -125,93 +205,29 @@ export default function LogsPage() {
         </Button>
       </div>
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>模块</TableHead>
-              <TableHead>操作描述</TableHead>
-              <TableHead>请求方式</TableHead>
-              <TableHead>请求地址</TableHead>
-              <TableHead>操作人</TableHead>
-              <TableHead>IP</TableHead>
-              <TableHead>操作时间</TableHead>
-              <TableHead className="text-right">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center">
-                  加载中...
-                </TableCell>
-              </TableRow>
-            ) : logs.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center">
-                  暂无数据
-                </TableCell>
-              </TableRow>
-            ) : (
-              logs.map((log) => (
-                <TableRow key={log.id}>
-                  <TableCell>{log.module}</TableCell>
-                  <TableCell className="max-w-[200px] truncate">
-                    {log.description}
-                  </TableCell>
-                  <TableCell>
-                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
-                      {log.method}
-                    </code>
-                  </TableCell>
-                  <TableCell className="max-w-[180px] truncate text-muted-foreground font-mono text-xs">
-                    {log.uri}
-                  </TableCell>
-                  <TableCell>{log.nickname}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {log.ipAddress}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {log.createTime}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => handleDelete(log.id)}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-end gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={current === 1}
-            onClick={() => setCurrent((p) => p - 1)}
-          >
-            上一页
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            {current} / {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={current === totalPages}
-            onClick={() => setCurrent((p) => p + 1)}
-          >
-            下一页
-          </Button>
-        </div>
+      {loading ? (
+        <DataTableSkeleton columns={8} rows={5} />
+      ) : logs.length === 0 ? (
+        <EmptyState
+          icon={Trash2}
+          title="暂无日志"
+          description="还没有任何操作日志"
+        />
+      ) : (
+        <DataTable
+          data={logs}
+          columns={columns}
+          pageCount={totalPages}
+          pageSize={pageSize}
+          currentPage={current}
+          onPageChange={setCurrent}
+          onPageSizeChange={handlePageSizeChange}
+          sortable={true}
+          filterable={true}
+          loading={false}
+          emptyTitle="暂无日志"
+          emptyDescription="还没有任何操作日志"
+        />
       )}
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -226,7 +242,10 @@ export default function LogsPage() {
             确定要删除该日志吗？此操作不可恢复。
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+            >
               取消
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>
@@ -248,7 +267,10 @@ export default function LogsPage() {
             确定要清空所有日志吗？此操作不可恢复。
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setClearDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setClearDialogOpen(false)}
+            >
               取消
             </Button>
             <Button variant="destructive" onClick={confirmClear}>

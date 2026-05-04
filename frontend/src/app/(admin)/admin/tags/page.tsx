@@ -1,18 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { type ColumnDef } from "@tanstack/react-table";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { toast } from "sonner";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,8 +16,9 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { DataTable } from "@/components/data-table";
+import { DataTableSkeleton } from "@/components/data-table/data-table-skeleton";
+import { EmptyState, EmptyStates } from "@/components/ui/empty-state";
 
 interface Tag {
   id: number;
@@ -30,6 +26,12 @@ interface Tag {
   articleCount: number;
   createTime: string;
 }
+
+interface TagListResponse {
+  records: Tag[];
+}
+
+type TagApiResponse = Tag[] | TagListResponse;
 
 export default function TagsPage() {
   const [tags, setTags] = useState<Tag[]>([]);
@@ -39,14 +41,20 @@ export default function TagsPage() {
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get<{ records: Tag[] } | Tag[]>("/admin/tags");
+      const res = await api.get<TagApiResponse>("/admin/tags");
       if (res.flag) {
-        const d = res.data as { records?: Tag[] };
-        setTags(Array.isArray(res.data) ? res.data : d.records ?? []);
+        const data = res.data;
+        if (Array.isArray(data)) {
+          setTags(data);
+        } else {
+          setTags(data.records);
+        }
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "操作失败");
@@ -65,11 +73,11 @@ export default function TagsPage() {
     setDialogOpen(true);
   };
 
-  const openEdit = (tag: Tag) => {
+  const openEdit = useCallback((tag: Tag) => {
     setEditingId(tag.id);
     setName(tag.tagName);
     setDialogOpen(true);
-  };
+  }, []);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -78,9 +86,7 @@ export default function TagsPage() {
     }
     try {
       const payload = { id: editingId, tagName: name };
-      // 后端 SaveOrUpdateTag 统一用 POST，有 id 则更新，无 id 则新增
       const res = await api.post("/admin/tags", payload);
-
       if (res.flag) {
         toast.success(editingId ? "修改成功" : "添加成功");
         setDialogOpen(false);
@@ -93,10 +99,10 @@ export default function TagsPage() {
     }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = useCallback((id: number) => {
     setPendingDeleteId(id);
     setDeleteDialogOpen(true);
-  };
+  }, []);
 
   const confirmDelete = async () => {
     if (!pendingDeleteId) return;
@@ -116,6 +122,69 @@ export default function TagsPage() {
     }
   };
 
+  const totalPages = Math.ceil(tags.length / pageSize) || 1;
+
+  const handlePageSizeChange = useCallback((size: number) => {
+    setPageSize(size);
+    setCurrentPage(1);
+  }, []);
+
+  const columns: ColumnDef<Tag>[] = useMemo(
+    () => [
+      {
+        accessorKey: "tagName",
+        header: "标签名称",
+        enableSorting: true,
+        cell: ({ row }) => (
+          <span className="font-medium">{row.original.tagName}</span>
+        ),
+      },
+      {
+        accessorKey: "articleCount",
+        header: "文章数",
+        enableSorting: true,
+      },
+      {
+        accessorKey: "createTime",
+        header: "创建时间",
+        enableSorting: true,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.createTime}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "操作",
+        enableSorting: false,
+        size: 120,
+        cell: ({ row }) => {
+          const tag = row.original;
+          return (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => openEdit(tag)}
+              >
+                <Pencil className="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => handleDelete(tag.id)}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    [openEdit, handleDelete]
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -126,61 +195,26 @@ export default function TagsPage() {
         </Button>
       </div>
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>标签名称</TableHead>
-              <TableHead>文章数</TableHead>
-              <TableHead>创建时间</TableHead>
-              <TableHead className="text-right">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={4} className="h-24 text-center">
-                  加载中...
-                </TableCell>
-              </TableRow>
-            ) : tags.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4} className="h-24 text-center">
-                  暂无数据
-                </TableCell>
-              </TableRow>
-            ) : (
-              tags.map((tag) => (
-                <TableRow key={tag.id}>
-                  <TableCell className="font-medium">{tag.tagName}</TableCell>
-                  <TableCell>{tag.articleCount}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {tag.createTime}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => openEdit(tag)}
-                      >
-                        <Pencil className="size-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => handleDelete(tag.id)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      {loading ? (
+        <DataTableSkeleton columns={4} rows={5} />
+      ) : tags.length === 0 ? (
+        <EmptyState {...EmptyStates.tags} />
+      ) : (
+        <DataTable
+          data={tags}
+          columns={columns}
+          pageCount={totalPages}
+          pageSize={pageSize}
+          currentPage={currentPage}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={handlePageSizeChange}
+          sortable={true}
+          filterable={true}
+          loading={false}
+          emptyTitle="暂无标签"
+          emptyDescription="还没有创建任何标签"
+        />
+      )}
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="max-w-sm">
@@ -194,7 +228,10 @@ export default function TagsPage() {
             确定要删除该标签吗？此操作不可恢复。
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+            >
               取消
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>

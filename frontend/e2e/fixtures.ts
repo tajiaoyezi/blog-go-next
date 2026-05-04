@@ -1,3 +1,5 @@
+/* eslint-disable react-hooks/rules-of-hooks */
+// Playwright fixtures use `use` as a callback parameter, which is NOT a React Hook.
 import { test as base, expect, type Page, type APIRequestContext } from "@playwright/test";
 
 const API_BASE = process.env.API_BASE || "http://localhost:8080/api/v1";

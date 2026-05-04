@@ -1,18 +1,13 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { type ColumnDef } from "@tanstack/react-table";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { toast } from "sonner";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -21,8 +16,9 @@ import {
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
-import { toast } from "sonner";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { DataTable } from "@/components/data-table";
+import { DataTableSkeleton } from "@/components/data-table/data-table-skeleton";
+import { EmptyState, EmptyStates } from "@/components/ui/empty-state";
 
 interface Category {
   id: number;
@@ -30,6 +26,12 @@ interface Category {
   articleCount: number;
   createTime: string;
 }
+
+interface CategoryListResponse {
+  records: Category[];
+}
+
+type CategoryApiResponse = Category[] | CategoryListResponse;
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -39,16 +41,20 @@ export default function CategoriesPage() {
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [name, setName] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.get<{ records: Category[] } | Category[]>(
-        "/admin/categories",
-      );
+      const res = await api.get<CategoryApiResponse>("/admin/categories");
       if (res.flag) {
-        const d = res.data as { records?: Category[] };
-        setCategories(Array.isArray(res.data) ? res.data : d.records ?? []);
+        const data = res.data;
+        if (Array.isArray(data)) {
+          setCategories(data);
+        } else {
+          setCategories(data.records);
+        }
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "操作失败");
@@ -67,11 +73,11 @@ export default function CategoriesPage() {
     setDialogOpen(true);
   };
 
-  const openEdit = (cat: Category) => {
+  const openEdit = useCallback((cat: Category) => {
     setEditingId(cat.id);
     setName(cat.categoryName);
     setDialogOpen(true);
-  };
+  }, []);
 
   const handleSave = async () => {
     if (!name.trim()) {
@@ -80,9 +86,7 @@ export default function CategoriesPage() {
     }
     try {
       const payload = { id: editingId, categoryName: name };
-      // 后端 SaveOrUpdateCategory 统一用 POST，有 id 则更新，无 id 则新增
       const res = await api.post("/admin/categories", payload);
-
       if (res.flag) {
         toast.success(editingId ? "修改成功" : "添加成功");
         setDialogOpen(false);
@@ -95,10 +99,10 @@ export default function CategoriesPage() {
     }
   };
 
-  const handleDelete = (id: number) => {
+  const handleDelete = useCallback((id: number) => {
     setPendingDeleteId(id);
     setDeleteDialogOpen(true);
-  };
+  }, []);
 
   const confirmDelete = async () => {
     if (!pendingDeleteId) return;
@@ -118,6 +122,69 @@ export default function CategoriesPage() {
     }
   };
 
+  const totalPages = Math.ceil(categories.length / pageSize) || 1;
+
+  const handlePageSizeChange = useCallback((size: number) => {
+    setPageSize(size);
+    setCurrentPage(1);
+  }, []);
+
+  const columns: ColumnDef<Category>[] = useMemo(
+    () => [
+      {
+        accessorKey: "categoryName",
+        header: "分类名称",
+        enableSorting: true,
+        cell: ({ row }) => (
+          <span className="font-medium">{row.original.categoryName}</span>
+        ),
+      },
+      {
+        accessorKey: "articleCount",
+        header: "文章数",
+        enableSorting: true,
+      },
+      {
+        accessorKey: "createTime",
+        header: "创建时间",
+        enableSorting: true,
+        cell: ({ row }) => (
+          <span className="text-muted-foreground">
+            {row.original.createTime}
+          </span>
+        ),
+      },
+      {
+        id: "actions",
+        header: "操作",
+        enableSorting: false,
+        size: 120,
+        cell: ({ row }) => {
+          const cat = row.original;
+          return (
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => openEdit(cat)}
+              >
+                <Pencil className="size-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => handleDelete(cat.id)}
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    [openEdit, handleDelete]
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -128,63 +195,26 @@ export default function CategoriesPage() {
         </Button>
       </div>
 
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>分类名称</TableHead>
-              <TableHead>文章数</TableHead>
-              <TableHead>创建时间</TableHead>
-              <TableHead className="text-right">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={4} className="h-24 text-center">
-                  加载中...
-                </TableCell>
-              </TableRow>
-            ) : categories.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4} className="h-24 text-center">
-                  暂无数据
-                </TableCell>
-              </TableRow>
-            ) : (
-              categories.map((cat) => (
-                <TableRow key={cat.id}>
-                  <TableCell className="font-medium">
-                    {cat.categoryName}
-                  </TableCell>
-                  <TableCell>{cat.articleCount}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {cat.createTime}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => openEdit(cat)}
-                      >
-                        <Pencil className="size-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => handleDelete(cat.id)}
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      {loading ? (
+        <DataTableSkeleton columns={4} rows={5} />
+      ) : categories.length === 0 ? (
+        <EmptyState {...EmptyStates.categories} />
+      ) : (
+        <DataTable
+          data={categories}
+          columns={columns}
+          pageCount={totalPages}
+          pageSize={pageSize}
+          currentPage={currentPage}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={handlePageSizeChange}
+          sortable={true}
+          filterable={true}
+          loading={false}
+          emptyTitle="暂无分类"
+          emptyDescription="还没有创建任何分类"
+        />
+      )}
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="max-w-sm">
@@ -198,7 +228,10 @@ export default function CategoriesPage() {
             确定要删除该分类吗？此操作不可恢复。
           </p>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteDialogOpen(false)}
+            >
               取消
             </Button>
             <Button variant="destructive" onClick={confirmDelete}>

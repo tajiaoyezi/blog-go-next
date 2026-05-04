@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useSyncExternalStore } from "react";
+import React, { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -51,6 +51,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { useAuthStore, useHydrated } from "@/stores/auth";
+import { CommandPalette } from "@/components/command-palette";
 
 /* ==============================
  * 侧边栏菜单配置
@@ -299,6 +300,7 @@ export default function AdminLayout({
         {/* 主内容区 */}
         <main className="flex-1 p-6">{children}</main>
       </SidebarInset>
+      <CommandPalette />
     </SidebarProvider>
   );
 }

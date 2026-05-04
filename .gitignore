@@ -45,3 +45,7 @@ backend/server
 
 # 自测截图
 /*.png
+
+# Test artifacts
+frontend/test-results/
+frontend/playwright-report/
